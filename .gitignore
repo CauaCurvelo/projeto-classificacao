@@ -1,0 +1,8 @@
+__pycache__/
+*.pyc
+venv/
+.env
+historico.db
+ml/modelo.pkl
+dataset/processed_dataset.csv
+dataset/Fake.br-Corpus/
