@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Fact-Check</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #0f1115;
+            --surface: #1a1d24;
+            --text: #e2e8f0;
+            --text-muted: #94a3b8;
+            --border: #2e364f;
+            --accent: #3b82f6;
+            --success: #10b981;
+            --danger: #ef4444;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            color: var(--text);
+            display: flex;
+            justify-content: center;
+            align-items: flex-start;
+            min-height: 100vh;
+            margin: 0;
+            padding: 4rem 1rem;
+            box-sizing: border-box;
+        }
+        .container {
+            width: 100%;
+            max-width: 800px;
+        }
+        h1 {
+            font-size: 1.5rem;
+            font-weight: 600;
+            margin: 0 0 1.5rem 0;
+            text-align: center;
+            letter-spacing: -0.5px;
+            color: var(--text);
+        }
+        textarea {
+            width: 100%;
+            min-height: 280px;
+            padding: 1.2rem;
+            border-radius: 8px;
+            border: 1px solid var(--border);
+            background: var(--surface);
+            color: var(--text);
+            font-family: 'Inter', sans-serif;
+            font-size: 1rem;
+            line-height: 1.6;
+            resize: vertical;
+            box-sizing: border-box;
+            transition: border-color 0.2s;
+        }
+        textarea:focus {
+            outline: none;
+            border-color: var(--accent);
+        }
+        button {
+            width: 100%;
+            padding: 1rem;
+            margin-top: 1rem;
+            background: var(--accent);
+            color: white;
+            border: none;
+            border-radius: 8px;
+            font-size: 1rem;
+            font-weight: 500;
+            cursor: pointer;
+            transition: opacity 0.2s;
+        }
+        button:hover { opacity: 0.9; }
+        button:disabled { background: var(--border); color: var(--text-muted); cursor: not-allowed; }
+        
+        #result {
+            margin-top: 1.5rem;
+            padding: 1.5rem;
+            border-radius: 8px;
+            background: var(--surface);
+            border: 1px solid var(--border);
+            display: none;
+            animation: fadeIn 0.3s ease;
+        }
+        .status { font-size: 1.2rem; font-weight: 600; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 8px; }
+        .confiavel .status { color: var(--success); }
+        .inconclusivo .status { color: #f59e0b; }
+        .nao-confiavel .status { color: var(--danger); }
+        
+        .meta { font-size: 0.85rem; color: var(--text-muted); display: flex; flex-direction: column; gap: 4px; margin-top: 1rem;}
+        .meta-row { display: flex; justify-content: space-between; }
+        .disclaimer { font-size: 0.75rem; color: #64748b; font-style: italic; margin-top: 8px;}
+        
+        .progress-bg { width: 100%; height: 8px; background: rgba(255,255,255,0.1); border-radius: 4px; margin-top: 0.5rem; overflow: hidden; }
+        .progress-fill { height: 100%; width: 0%; transition: width 0.5s ease; border-radius: 4px; }
+        .confiavel .progress-fill { background: var(--success); }
+        .inconclusivo .progress-fill { background: #f59e0b; }
+        .nao-confiavel .progress-fill { background: var(--danger); }
+
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(-5px); } to { opacity: 1; transform: translateY(0); } }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Fact-Check</h1>
+        <textarea id="textoNoticia" placeholder="Cole a notícia completa aqui para análise... (mínimo de 30 caracteres)"></textarea>
+        <button id="btnVerificar" onclick="verificar()">Analisar Notícia</button>
+
+        <div id="result">
+            <div class="status" id="status-text"></div>
+            <div class="progress-bg"><div class="progress-fill" id="progress-fill"></div></div>
+            <div class="meta">
+                <div class="meta-row">
+                    <span id="confidence-text"></span>
+                    <span id="source-text"></span>
+                </div>
+                <div class="disclaimer" id="disclaimer-text"></div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        async function verificar() {
+            const texto = document.getElementById('textoNoticia').value;
+            const btn = document.getElementById('btnVerificar');
+            const resultDiv = document.getElementById('result');
+
+            if (!texto.trim()) return;
+
+            btn.disabled = true;
+            btn.innerText = "Analisando...";
+            resultDiv.style.display = "none";
+            resultDiv.className = "";
+            document.getElementById('progress-fill').style.width = '0%';
+
+            try {
+                const response = await fetch('http://127.0.0.1:8000/verify', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ texto: texto })
+                });
+
+                if (response.status === 422) {
+                    alert("Erro: Texto muito curto ou vazio. Insira um texto maior e mais detalhado (mínimo de 30 caracteres) para que a IA consiga extrair padrões linguísticos.");
+                    return;
+                }
+
+                const data = await response.json();
+                if (data.erro) { alert(data.erro); return; }
+
+                const confPct = Math.round((data.confianca || 0) * 100);
+                
+                // Termômetro Visual
+                let isTrust = false;
+                if (confPct >= 61) {
+                    resultDiv.classList.add(data.classificacao === "Confiável" ? 'confiavel' : 'nao-confiavel');
+                    isTrust = data.classificacao === "Confiável";
+                } else {
+                    resultDiv.classList.add('inconclusivo');
+                    data.classificacao = "Inconclusivo / Necessita Cuidado";
+                }
+                
+                const icon = resultDiv.classList.contains('confiavel') ? '✓' : (resultDiv.classList.contains('inconclusivo') ? '⚠' : '✗');
+                document.getElementById('status-text').innerText = `${icon} ${data.classificacao}`;
+                
+                document.getElementById('confidence-text').innerText = `Probabilidade: ${confPct}%`;
+                
+                setTimeout(() => {
+                    document.getElementById('progress-fill').style.width = `${confPct}%`;
+                }, 50);
+
+                // Transparência da Fonte
+                let sourceDisplay = data.fonte;
+                let disclaimer = "";
+                
+                if (data.fonte.includes("API Externa")) {
+                    sourceDisplay = "Google Fact Check";
+                    disclaimer = "Fato verificado diretamente em agências de checagem oficiais.";
+                } else {
+                    sourceDisplay = "Inteligência Artificial";
+                    disclaimer = "* Disclaimer: Notícia não encontrada em bases oficiais de checagem. O resultado acima é uma predição estatística (Machine Learning) baseada apenas em padrões de linguagem e estilo de escrita, não constituindo verdade factual absoluta.";
+                }
+
+                if (data.fonte.includes("Cache Local")) {
+                    sourceDisplay += " (Cache Local)";
+                }
+
+                document.getElementById('source-text').innerText = `Fonte: ${sourceDisplay}`;
+                document.getElementById('disclaimer-text').innerText = disclaimer;
+
+                resultDiv.style.display = "block";
+            } catch (error) {
+                alert("Erro de conexão ao servidor.");
+            } finally {
+                btn.disabled = false;
+                btn.innerText = "Analisar Notícia";
+            }
+        }
+    </script>
+</body>
+</html>
